@@ -23,8 +23,6 @@
 #include <WiFi.h>
 #include <WiFiUdp.h>
 #include "time.h"
-//#include <string>
-//using std::string;
 
 const char networkName[] = "ssid";
 const char networkPswd[] = "pass";
@@ -148,13 +146,13 @@ void printCentered(char* msg, uint8_t lineNum)
 {
   String msgString = msg;
   uint16_t thisTextWidth;
-  Serial.printf("debug: checking msg width. font: %d msg: \"%s\" width: ", fontNum, msg); delay(25);
+  // Serial.printf("debug: checking msg width. font: %d msg: \"%s\" width: ", fontNum, msg); delay(25);
   thisTextWidth = tft.textWidth(msg, fontNum);
-  Serial.printf("%d pixels\n", thisTextWidth); delay(25);
+  // Serial.printf("%d pixels\n", thisTextWidth); delay(25);
   while (tft.textWidth(msg, fontNum) > width)
-  { Serial.printf("Too wide for screen: \"%s\"\n", msg); delay(25);
-    Serial.printf("%d characters, dropping character: ", strlen(msg)); delay(25);
-    Serial.printf("%c\n", msg[strlen(msg) - 1]); delay(25);
+  { Serial.printf("Too wide for screen: \"%s\"\n", msg);
+    // Serial.printf("%d characters, dropping character: ", strlen(msg));
+    // Serial.printf("%c\n", msg[strlen(msg) - 1]);
     msgString[strlen(msg) - 1] = '\0'; msg = (char* )msgString.c_str(); }
   thisTextWidth = tft.textWidth(msg, fontNum);
   uint16_t txtX = (width / 2) - (thisTextWidth / 2);
@@ -279,6 +277,12 @@ uint32_t swapped(uint32_t num)
          ((num<<24)&0xff000000); //      byte 0 to byte 3
 }
 
+long smallerof(long a, long b)
+{
+  if (a > b) { return b; }
+  return a;
+}
+
 
 struct tm timeinfo;
 time_t now;
@@ -307,8 +311,8 @@ void setup() {
   labelButton2(button2Label, txtbgcolor);    // redraw button label in case it gets covered up
   
   Serial.printf("Connecting to WiFi.\n");
-  printCentered("WiFi connecting:", 3);
-  printCentered((char *)networkName, 4);
+  printCentered("WiFi connecting:",  2);
+  printCentered((char *)networkName, 3);
   Serial2.setTimeout(timeout);
 
   //Connect to the WiFi network
@@ -324,18 +328,19 @@ void setup() {
   }
   Serial.printf("\nConnected to wifi. IP: ");
   char* ip = (char* )(WiFi.localIP().toString().c_str());
-  Serial.printf(ip);
+  Serial.printf("%s\n", ip);
   Serial.printf("Setting the time from NTP server\n");
-  printCentered((char *)networkName, 3);
-  printCentered("connected.",        4);
-  printCentered(ip,          5);
-  printCentered("Getting time from:",6);
-  printCentered((char *)ntpServer,   7);
+  printCentered((char *)networkName, 0);
+  printCentered("connected.",        1);
+  printCentered(ip,          2);
+  printCentered("Getting time from:",3);
+  printCentered((char *)ntpServer,   4);
   configTime((gmtOffset_hr * 3600L), (daylightOffset_hr * (int)3600), ntpServer);
+  delay(400);
   if(!getLocalTime(&timeinfo))
   {
     Serial.println("Failed to obtain time");
-    printCentered("Time failed", 6);
+    printCentered("Time failed", 3);
     return;
   }
   else
@@ -357,11 +362,11 @@ void setup() {
     //uint32_t unixTime = timeinfo.now();
     //Serial.println("\nUnix timestamp: %ld", unixTime);
   }
-  printCentered("Opening UDP port", 7);
+  printCentered("Opening UDP port", 2);
   Serial.printf("\nOpening reference to UDP port - ");
   udp.begin(udpPort);
   Serial.printf("Done.\n");
-  printCentered("", 7);
+  printCentered("", 2);
   connected = true;
   
   clearIncomingBuffer();
@@ -448,10 +453,10 @@ void loop() {
   now += epochShift; // change by 70 years (1900 based timestamp to 1970 based timestamp)
   getLocalTime(&timeinfo);
   
-  Serial.printf("timestamp: %lu\n", now);
+  // Serial.printf("timestamp: %lu\n", now);
   // Serial.printf("Epochtime: %x\n", getTime());
   strftime(timeStringBuff, sizeof(timeStringBuff) - 1, "%A, %B %d %Y %H:%M:%S", &timeinfo);
-  Serial.printf("%s - min sec %d %d\n", timeStringBuff, timeinfo.tm_min, timeinfo.tm_sec);
+  Serial.printf("%s\n", timeStringBuff);
   strftime(timeStringBuff, sizeof(timeStringBuff), "%A, %B %d %Y %H:%M:%S", &timeinfo);
   Serial.printf("%s\n", timeStringBuff);
   strftime(timeStringBuff, sizeof(timeStringBuff), "%A,", &timeinfo);
@@ -481,7 +486,7 @@ void loop() {
   Serial.printf("Test code variable - Size: %d, crc expected: %#x calculated: %#x\n", size, testVariable[size], dallas_crc8(testVariable, size)); */
   
   // now wait as long as needed to restart the cycle almost exactly 5 seconds after the previous one started.
-  unsigned long cycleEndTime = millis();
+unsigned long cycleEndTime = millis();
   Serial.printf("Ended at %.3f seconds\n", (cycleEndTime - cycleStartTime) / 1000.0F );
   long desiredEndTime = cycleStartTime + desiredCycleTime; // this will begin to malfunction after being online for 7.1 weeks or half of that?
   long timeToWait = desiredEndTime - cycleEndTime;
