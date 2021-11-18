@@ -23,6 +23,8 @@
 #include <WiFi.h>
 #include <WiFiUdp.h>
 #include "time.h"
+//#include <string>
+//using std::string;
 
 const char networkName[] = "ssid";
 const char networkPswd[] = "pass";
@@ -55,7 +57,7 @@ const uint8_t testcode[] = {
 */
 
 uint8_t rotation = 3;   // change this value for your desired rotation (0 - 3)
-uint8_t fontNum = 2;    // Only font numbers 2,4,6,7 are valid. Font 6 only contains characters [space] 0 1 2 3 4 5 6 7 8 9 : . - a p m
+uint8_t fontNum = 4;    // Only font numbers 2,4,6,7 are valid. Font 6 only contains characters [space] 0 1 2 3 4 5 6 7 8 9 : . - a p m
 uint8_t thisFontHeight; // Font 7 is a 7 segment font and only contains characters [space] 0 1 2 3 4 5 6 7 8 9 : .
 uint16_t width;
 uint16_t height;
@@ -144,11 +146,16 @@ char button2Label[] = "Rotate";
 
 void printCentered(char* msg, uint8_t lineNum)
 {
+  String msgString = msg;
   uint16_t thisTextWidth;
-  thisTextWidth = tft.textWidth(msg, fontNum);  
+  Serial.printf("debug: checking msg width. font: %d msg: \"%s\" width: ", fontNum, msg); delay(25);
+  thisTextWidth = tft.textWidth(msg, fontNum);
+  Serial.printf("%d pixels\n", thisTextWidth); delay(25);
   while (tft.textWidth(msg, fontNum) > width)
-  { Serial.printf("Too wide for screen: \"%s\"\n", msg);
-    msg[strlen(msg) - 1] = '\0'; }
+  { Serial.printf("Too wide for screen: \"%s\"\n", msg); delay(25);
+    Serial.printf("%d characters, dropping character: ", strlen(msg)); delay(25);
+    Serial.printf("%c\n", msg[strlen(msg) - 1]); delay(25);
+    msgString[strlen(msg) - 1] = '\0'; msg = (char* )msgString.c_str(); }
   thisTextWidth = tft.textWidth(msg, fontNum);
   uint16_t txtX = (width / 2) - (thisTextWidth / 2);
   if (rotation > 0) { lineNum++; }
