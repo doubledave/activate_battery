@@ -21,10 +21,16 @@
 
 #include <WiFi.h>
 #include <WiFiUdp.h>
+#include "time.h"
 
-const char * networkName = "ssid";
-const char * networkPswd = "pass";
-const char * udpAddress = "192.168.1.255";
+const char networkName[] = "ssid";
+const char networkPswd[] = "pass";
+const char udpAddress[]  = "192.168.1.255";
+// const char ntpServer[]= "192.168.1.1";
+const char ntpServer[]   = "pool.ntp.org";
+const float gmtOffset_hr = -6.0f;
+const float daylightOffset_hr = 1.0f;
+// const char // I forgot what I was going to put here
 const int udpPort = 5606;
 //Are we currently connected?
 boolean connected = false;
@@ -144,6 +150,18 @@ void clearIncomingBuffer()
   }
 }
 
+uint32_t swapped(uint32_t num)
+{ // https://stackoverflow.com/a/2182184/11087027
+  return ((num>>24)&0xff) | // move byte 3 to byte 0
+                    ((num<<8)&0xff0000) | // move byte 1 to byte 2
+                    ((num>>8)&0xff00) | // move byte 2 to byte 1
+                    ((num<<24)&0xff000000); // byte 0 to byte 3
+}
+
+
+struct tm timeinfo;
+time_t now;
+
 uint8_t size;
 long timeout = 1000;
 unsigned long desiredCycleTime = 5000;
@@ -155,12 +173,15 @@ void setup() {
   Serial.begin(115200);
   Serial2.begin(9600, SERIAL_8N1,25,26); // RX on pin 25 TX on pin 26
   delay(200);
-  Serial.printf("\nStarting.\n");
+  Serial.printf("\nStarting, connecting to WiFi.\n");
   Serial2.setTimeout(timeout);
 
   //Connect to the WiFi network
   // connectToWiFi(networkName, networkPswd);
-  WiFi.begin(networkName, networkPswd);
+  if (sizeof(networkPswd) > 0)
+  { WiFi.begin(networkName, networkPswd); }
+  else
+  { WiFi.begin(networkName); }
   while (WiFi.status() != WL_CONNECTED)
   {
     delay(500);
@@ -168,7 +189,26 @@ void setup() {
   }
   Serial.printf("\nConnected to wifi. IP: ");
   Serial.println(WiFi.localIP());
+  Serial.printf("Setting the time from NTP server\n");
+  configTime((gmtOffset_hr * 3600L), (daylightOffset_hr * (int)3600), ntpServer);
+  if(!getLocalTime(&timeinfo))
+  {
+    Serial.println("Failed to obtain time");
+    return;
+  }
+  else
+  {
+    Serial.printf("Time set. ");
+    char timeStringBuff[50];
+    strftime(timeStringBuff, sizeof(timeStringBuff), "%A, %B %d %Y %H:%M:%S", &timeinfo);
+    Serial.printf("%s\n", timeStringBuff);
+    //uint32_t unixTime = timeinfo.now();
+    //Serial.println("\nUnix timestamp: %ld", unixTime);
+  }
+  Serial.printf("\nOpening reference to UDP port - ");
   udp.begin(udpPort);
+  Serial.printf("Done.\n");
+  connected = true;
   
   clearIncomingBuffer();
 }
@@ -231,13 +271,31 @@ void loop() {
       Serial.printf("\nLow cell: %.3fV, High cell: %.3fV, Difference: %.3fV\n", lowCell, highCell, lowToHighCellDifference(lowCell, highCell) );
       if(connected)
       { udp.beginPacket(udpAddress,udpPort);
-        uint8_t timestamp [] = { 0x00, 0x00, 0x00, 0x00 }; // 32-bit unix timestamp will go here later
+        uint8_t timestamp [sizeof(now)];
+        time(&now);
+        now += 2208988800;
+        now = swapped(now);
+        memcpy(&timestamp, &now, sizeof(now));
         udp.write(timestamp, sizeof(timestamp)); 
         udp.write(incomingBuffer, sizeof(incomingBuffer));
         udp.endPacket();
+        // Serial.printf("sent %d bytes UDP\n", sizeof(incomingBuffer));
       }
     }
   }
+
+  char timeStringBuff[50];
+  
+  time(&now);
+  now += 2208988800; // change by 70 years (1900 based timestamp to 1970 based timestamp)
+  getLocalTime(&timeinfo);
+  
+  Serial.printf("timestamp: %lu\n", now);
+  // Serial.printf("Epochtime: %x\n", getTime());
+  strftime(timeStringBuff, sizeof(timeStringBuff) - 1, "%A, %B %d %Y %H:%M:%S", &timeinfo);
+  Serial.printf("%s - min sec %d %d\n", timeStringBuff, timeinfo.tm_min, timeinfo.tm_sec);
+  
+  
   
   /*
   // test crc routines
