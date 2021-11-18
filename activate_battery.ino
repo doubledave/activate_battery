@@ -35,6 +35,7 @@ const int udpPort = 5606;
 
 TFT_eSPI tft = TFT_eSPI();
 
+uint8_t mac[6];
 //Are we currently connected?
 boolean connected = false;
 //The udp library class
@@ -135,9 +136,9 @@ void labelButton2(char* string, uint16_t txtbgcolor)
   tft.drawString(string, txtX, txtY);
 }
 
-uint16_t bgcolor    = rgb(0,   0,   0  ); //choose your screen background color. See the rgb function above for more info.
-uint16_t txtbgcolor = rgb(170, 0,   170); // background color for the text area
-uint16_t txtfgcolor = rgb(255, 255, 255); // text foreground color
+uint16_t bgcolor    = rgb(128, 128, 128); //choose your screen background color. See the rgb function above for more info.
+uint16_t txtbgcolor = rgb(170, 0,   170); // button indicator background color
+uint16_t txtfgcolor = rgb(0,   0,   0  ); // text foreground color
 
 char button1Label[] = "Button1";
 char button2Label[] = "Rotate";
@@ -283,6 +284,24 @@ long smallerof(long a, long b)
   return a;
 }
 
+String ip2String(const IPAddress& ipAddress)
+{ // https://stackoverflow.com/a/55805863/11087027
+  return String(ipAddress[0]) + String(".") +
+         String(ipAddress[1]) + String(".") +
+         String(ipAddress[2]) + String(".") +
+         String(ipAddress[3]);
+}
+
+String mac2String(uint8_t* mac)
+{
+  return String(mac[0],HEX) + String(":") +
+         String(mac[1],HEX) + String(":") +
+         String(mac[2],HEX) + String(":") +
+         String(mac[3],HEX) + String(":") +
+         String(mac[4],HEX) + String(":") +
+         String(mac[5],HEX);
+}
+
 
 struct tm timeinfo;
 time_t now;
@@ -310,9 +329,11 @@ void setup() {
   // labelButton1(button1Label, txtbgcolor); // Don't have a use for button1 yet
   labelButton2(button2Label, txtbgcolor);    // redraw button label in case it gets covered up
   
-  Serial.printf("Connecting to WiFi.\n");
-  printCentered("WiFi connecting:",  0);
-  printCentered((char *)networkName, 1);
+  WiFi.macAddress(mac);
+  Serial.printf("Connecting to WiFi %s, MAC: %s\n", networkName, mac2String(mac));
+  printCentered((char *)mac2String(mac).c_str(), 0);
+  printCentered("WiFi connecting:",              1);
+  printCentered((char *)networkName,             2);
   Serial2.setTimeout(timeout);
 
   //Connect to the WiFi network
@@ -327,12 +348,11 @@ void setup() {
     Serial.print(".");
   }
   Serial.printf("\nConnected to wifi. IP: ");
-  char* ip = (char* )(WiFi.localIP().toString().c_str()); // TODO: fix this; ip appears to be blank
-  Serial.printf("%s\n", ip);
+  Serial.printf("%s\n", ip2String(WiFi.localIP()));
   Serial.printf("Setting the time from NTP server\n");
-  printCentered((char *)networkName, 0);
-  printCentered(ip,                  1);
-  printCentered((char *)ntpServer,   2);
+  printCentered((char *)networkName,                       0);
+  printCentered((char *)ip2String(WiFi.localIP()).c_str(), 1);
+  printCentered((char *)ntpServer,                         2);
   configTime((gmtOffset_hr * 3600L), (daylightOffset_hr * (int)3600), ntpServer);
   delay(400);
   if(!getLocalTime(&timeinfo))
@@ -463,6 +483,9 @@ void loop() {
   printCentered(timeStringBuff, 2);
   strftime(timeStringBuff, sizeof(timeStringBuff), "%H:%M:%S", &timeinfo);
   printCentered(timeStringBuff, 3);
+
+  long rssi = WiFi.RSSI();
+  Serial.printf("Strength of WiFi signal from access point: %ld\n", rssi);
   
   
   /*
