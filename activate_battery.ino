@@ -27,8 +27,8 @@
 const char networkName[] = "ssid";
 const char networkPswd[] = "pass";
 const char udpAddress[]  = "192.168.1.255";
-// const char ntpServer[]= "192.168.1.1";
-const char ntpServer[]   = "pool.ntp.org";
+const char ntpServer1[]  = "north-america.pool.ntp.org";
+// const char ntpServer2[]  = "time.nist.gov"; // backup server
 const float gmtOffset_hr = -6.0f;
 const float daylightOffset_hr = 1.0f;
 const int udpPort = 5606;
@@ -317,6 +317,7 @@ void setup() {
   Serial.begin(115200);
   Serial2.begin(9600, SERIAL_8N1,25,26); // RX on pin 25 TX on pin 26
   delay(200);
+  Serial2.setTimeout(timeout);
   Serial.printf("\nStarting, initializing TFT display\n");
   tft.init();
   tft.setRotation(rotation);
@@ -330,12 +331,11 @@ void setup() {
   labelButton2(button2Label, txtbgcolor);    // redraw button label in case it gets covered up
   
   WiFi.macAddress(mac);
-  Serial.printf("Connecting to WiFi %s, MAC: %s\n", networkName, mac2String(mac));
+  Serial.printf("Connecting to WiFi %s, MAC: %s\n", networkName, mac2String(mac).c_str());
   printCentered((char *)mac2String(mac).c_str(), 0);
   printCentered("WiFi connecting:",              1);
   printCentered((char *)networkName,             2);
-  Serial2.setTimeout(timeout);
-
+  
   //Connect to the WiFi network
   // connectToWiFi(networkName, networkPswd);
   if (sizeof(networkPswd) > 0)
@@ -350,15 +350,20 @@ void setup() {
   Serial.printf("\nConnected to wifi. IP: ");
   Serial.printf("%s\n", ip2String(WiFi.localIP()));
   Serial.printf("Setting the time from NTP server\n");
-  printCentered((char *)networkName,                       0);
-  printCentered((char *)ip2String(WiFi.localIP()).c_str(), 1);
-  printCentered((char *)ntpServer,                         2);
-  configTime((gmtOffset_hr * 3600L), (daylightOffset_hr * (int)3600), ntpServer);
+  printCentered((char *)networkName,                         0);
+  printCentered((char *)ip2String(WiFi.localIP()).c_str(),   1);
+  printCentered((char *)ip2String(WiFi.gatewayIP()).c_str(), 3);
+  printCentered((char *)ntpServer1,                          2);
+  // printCentered((char *)ntpServer2,                          4);
+  Serial.printf("Gateway IP: %s\n", (char *)ip2String(WiFi.gatewayIP()).c_str());
+  configTime((gmtOffset_hr * 3600L), (daylightOffset_hr * (int)3600), ntpServer1, (char *)ip2String(WiFi.gatewayIP()).c_str());
   delay(400);
   if(!getLocalTime(&timeinfo))
   {
     Serial.println("Failed to obtain time");
-    printCentered("Time failed", 3);
+    printCentered("Time failed", 2);
+    printCentered("",            3);
+    printCentered("",            4);
     return;
   }
   else
