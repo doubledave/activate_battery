@@ -156,7 +156,7 @@ void printCentered(char* msg, uint8_t lineNum)
     msgString[strlen(msg) - 1] = '\0'; msg = (char* )msgString.c_str(); }
   thisTextWidth = tft.textWidth(msg, fontNum);
   uint16_t txtX = (width / 2) - (thisTextWidth / 2);
-  if (rotation > 0) { lineNum++; }
+  if (rotation > 0 && rotation < 3) { lineNum++; }
   uint16_t txtY = lineNum * thisFontHeight;
   if (txtY + thisFontHeight < height)
   {
@@ -288,8 +288,8 @@ struct tm timeinfo;
 time_t now;
 
 uint8_t size;
-long timeout = 1000;
-unsigned long desiredCycleTime = 5000;
+long timeout = 700;
+unsigned long desiredCycleTime = 1000;
 
 
 
@@ -311,8 +311,8 @@ void setup() {
   labelButton2(button2Label, txtbgcolor);    // redraw button label in case it gets covered up
   
   Serial.printf("Connecting to WiFi.\n");
-  printCentered("WiFi connecting:",  2);
-  printCentered((char *)networkName, 3);
+  printCentered("WiFi connecting:",  0);
+  printCentered((char *)networkName, 1);
   Serial2.setTimeout(timeout);
 
   //Connect to the WiFi network
@@ -327,14 +327,12 @@ void setup() {
     Serial.print(".");
   }
   Serial.printf("\nConnected to wifi. IP: ");
-  char* ip = (char* )(WiFi.localIP().toString().c_str());
+  char* ip = (char* )(WiFi.localIP().toString().c_str()); // TODO: fix this; ip appears to be blank
   Serial.printf("%s\n", ip);
   Serial.printf("Setting the time from NTP server\n");
   printCentered((char *)networkName, 0);
-  printCentered("connected.",        1);
-  printCentered(ip,          2);
-  printCentered("Getting time from:",3);
-  printCentered((char *)ntpServer,   4);
+  printCentered(ip,                  1);
+  printCentered((char *)ntpServer,   2);
   configTime((gmtOffset_hr * 3600L), (daylightOffset_hr * (int)3600), ntpServer);
   delay(400);
   if(!getLocalTime(&timeinfo))
@@ -362,11 +360,11 @@ void setup() {
     //uint32_t unixTime = timeinfo.now();
     //Serial.println("\nUnix timestamp: %ld", unixTime);
   }
-  printCentered("Opening UDP port", 2);
+  printCentered("Opening UDP port", 0);
   Serial.printf("\nOpening reference to UDP port - ");
   udp.begin(udpPort);
   Serial.printf("Done.\n");
-  printCentered("", 2);
+  printCentered("", 0);
   connected = true;
   
   clearIncomingBuffer();
@@ -457,8 +455,6 @@ void loop() {
   // Serial.printf("Epochtime: %x\n", getTime());
   strftime(timeStringBuff, sizeof(timeStringBuff) - 1, "%A, %B %d %Y %H:%M:%S", &timeinfo);
   Serial.printf("%s\n", timeStringBuff);
-  strftime(timeStringBuff, sizeof(timeStringBuff), "%A, %B %d %Y %H:%M:%S", &timeinfo);
-  Serial.printf("%s\n", timeStringBuff);
   strftime(timeStringBuff, sizeof(timeStringBuff), "%A,", &timeinfo);
   printCentered(timeStringBuff, 0);
   strftime(timeStringBuff, sizeof(timeStringBuff), "%B", &timeinfo);
@@ -487,7 +483,7 @@ void loop() {
   
   // now wait as long as needed to restart the cycle almost exactly 5 seconds after the previous one started.
 unsigned long cycleEndTime = millis();
-  Serial.printf("Ended at %.3f seconds\n", (cycleEndTime - cycleStartTime) / 1000.0F );
+  Serial.printf("Ended at %.3f seconds, waiting ", (cycleEndTime - cycleStartTime) / 1000.0F );
   long desiredEndTime = cycleStartTime + desiredCycleTime; // this will begin to malfunction after being online for 7.1 weeks or half of that?
   long timeToWait = desiredEndTime - cycleEndTime;
   // Serial.printf("cycleStartTime:  %d ms,\n cycleStopTime:  %d ms,\ndesiredEndTime: %d ms,\ntimeToWait: %d ms\n", cycleStartTime, cycleEndTime, desiredEndTime, timeToWait);
@@ -500,7 +496,7 @@ unsigned long cycleEndTime = millis();
       if ( now - desiredEndTime > 0) { delay(now - desiredEndTime); }     
     }
   }
-  Serial.printf("\nRepeating cycle %.3f seconds after starting it\n", (millis() - cycleStartTime) / 1000.0 );
+  Serial.printf(" - Full cycle time: %.3f S\n\n", (millis() - cycleStartTime) / 1000.0 );
   
 }
 
