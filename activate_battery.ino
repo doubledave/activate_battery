@@ -316,13 +316,14 @@ void setup() {
     Serial.print(".");
   }
   Serial.printf("\nConnected to wifi. IP: ");
-  Serial.println(WiFi.localIP());
+  char* ip = (char* )(WiFi.localIP().toString().c_str());
+  Serial.printf(ip);
   Serial.printf("Setting the time from NTP server\n");
-  printCentered((char *)networkName,          3);
-  printCentered("connected.",     4);
-  // printCentered((char *)WiFi.localIP(),       5); // not sure how to convert to a string yet
-  printCentered("Getting time from:", 6);
-  printCentered((char *)ntpServer,            7);
+  printCentered((char *)networkName, 3);
+  printCentered("connected.",        4);
+  printCentered(ip,          5);
+  printCentered("Getting time from:",6);
+  printCentered((char *)ntpServer,   7);
   configTime((gmtOffset_hr * 3600L), (daylightOffset_hr * (int)3600), ntpServer);
   if(!getLocalTime(&timeinfo))
   {
