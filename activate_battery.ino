@@ -54,7 +54,7 @@ const uint8_t testcode[] = {
   0x0E, 0x56, 0x0E, 0x52, 0x2C, 0x13 };
 */
 
-uint8_t rotation = 1;   // change this value for your desired rotation (0 - 3)
+uint8_t rotation = 3;   // change this value for your desired rotation (0 - 3)
 uint8_t fontNum = 2;    // Only font numbers 2,4,6,7 are valid. Font 6 only contains characters [space] 0 1 2 3 4 5 6 7 8 9 : . - a p m
 uint8_t thisFontHeight; // Font 7 is a 7 segment font and only contains characters [space] 0 1 2 3 4 5 6 7 8 9 : .
 uint16_t width;
@@ -155,7 +155,7 @@ void printCentered(char* msg, uint8_t lineNum)
   uint16_t txtY = lineNum * thisFontHeight;
   if (txtY + thisFontHeight < height)
   {
-    tft.fillRect(0, txtY, width - 1, thisFontHeight - 1, bgcolor);
+    tft.fillRect(0, txtY, width - 1, thisFontHeight, bgcolor);
     tft.drawString(msg, txtX, txtY);
     //labelButton1(button1Label, txtbgcolor); // Don't have a use for button1 yet
     labelButton2(button2Label, txtbgcolor);
