@@ -3,6 +3,7 @@
  * It sends the 5-byte wakupstring to a NCR18650BD Okai ES200G scooter battery pack
  * and interprets the 36-byte data packet returned from the battery pack.
  * TODO: Display battery stats on the display, transmit packet over UDP.
+ * https://github.com/espressif/arduino-esp32/blob/master/libraries/WiFi/examples/WiFiUDPClient/WiFiUDPClient.ino
  *
  * Connections: Use a DC to DC converter that has a common negative that converts 42+ volts DC to 5V DC.
  * The negative of the battery pack is the 0V voltage reference for the serial pins.  From the DC-DC
@@ -20,6 +21,15 @@
 
 #include <WiFi.h>
 #include <WiFiUdp.h>
+
+const char * networkName = "ssid";
+const char * networkPswd = "pass";
+const char * udpAddress = "192.168.1.255";
+const int udpPort = 5606;
+//Are we currently connected?
+boolean connected = false;
+//The udp library class
+WiFiUDP udp;
 
 const uint8_t wakeupstring[] = {
   0x3A, 0x13, 0x01, 0x16, 0x79 };
@@ -147,6 +157,19 @@ void setup() {
   delay(200);
   Serial.printf("\nStarting.\n");
   Serial2.setTimeout(timeout);
+
+  //Connect to the WiFi network
+  // connectToWiFi(networkName, networkPswd);
+  WiFi.begin(networkName, networkPswd);
+  while (WiFi.status() != WL_CONNECTED)
+  {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.printf("\nConnected to wifi. IP: ");
+  Serial.println(WiFi.localIP());
+  udp.begin(udpPort);
+  
   clearIncomingBuffer();
 }
 
@@ -206,6 +229,13 @@ void loop() {
       float lowCell = lowCellV(incomingBuffer);
       float highCell = highCellV(incomingBuffer);
       Serial.printf("\nLow cell: %.3fV, High cell: %.3fV, Difference: %.3fV\n", lowCell, highCell, lowToHighCellDifference(lowCell, highCell) );
+      if(connected)
+      { udp.beginPacket(udpAddress,udpPort);
+        uint8_t timestamp [] = { 0x00, 0x00, 0x00, 0x00 }; // 32-bit unix timestamp will go here later
+        udp.write(timestamp, sizeof(timestamp)); 
+        udp.write(incomingBuffer, sizeof(incomingBuffer));
+        udp.endPacket();
+      }
     }
   }
   
@@ -243,3 +273,40 @@ void loop() {
   Serial.printf("\nRepeating cycle %.3f seconds after starting it\n", (millis() - cycleStartTime) / 1000.0 );
   
 }
+
+/*
+void connectToWifi(const char * ssid, const char * pwd)
+{
+  Serial.println("Connecting to WiFi network: " + String(ssid));
+  // delete old config
+  WiFi.disconnect(true);
+  //register event handler
+  WiFi.onEvent(WiFiEvent);
+  
+  //Initiate connection
+  if (sizeof(pwd) > 0)
+  { WiFi.begin(ssid, pwd); }
+  else
+  { WiFi.begin(ssid); }
+  Serial.println("Waiting for WIFI connection...");
+}
+
+//wifi event handler
+void WiFiEvent(WiFiEvent_t event){
+    switch(event) {
+      case ARDUINO_EVENT_WIFI_STA_GOT_IP:
+          //When connected set 
+          Serial.print("WiFi connected! IP address: ");
+          Serial.println(WiFi.localIP());  
+          //initializes the UDP state
+          //This initializes the transfer buffer
+          udp.begin(WiFi.localIP(),udpPort);
+          connected = true;
+          break;
+      case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
+          Serial.println("WiFi lost connection");
+          connected = false;
+          break;
+      default: break;
+    }
+} */
