@@ -19,6 +19,7 @@
  * Arduino runs on: Core 1, PSRAM: Disabled, Partition Scheme: Huge APP (3 MB No OTA / 1 MB SPIFFS), Upload speed: 921600
  */
 
+#include <TFT_eSPI.h>
 #include <WiFi.h>
 #include <WiFiUdp.h>
 #include "time.h"
@@ -30,8 +31,10 @@ const char udpAddress[]  = "192.168.1.255";
 const char ntpServer[]   = "pool.ntp.org";
 const float gmtOffset_hr = -6.0f;
 const float daylightOffset_hr = 1.0f;
-// const char // I forgot what I was going to put here
 const int udpPort = 5606;
+
+TFT_eSPI tft = TFT_eSPI();
+
 //Are we currently connected?
 boolean connected = false;
 //The udp library class
@@ -50,6 +53,116 @@ const uint8_t testcode[] = {
   0x00, 0xE5, 0xFF, 0xFF, 0xFF, 0x5E,
   0x0E, 0x56, 0x0E, 0x52, 0x2C, 0x13 };
 */
+
+uint8_t rotation = 1;   // change this value for your desired rotation (0 - 3)
+uint8_t fontNum = 2;    // Only font numbers 2,4,6,7 are valid. Font 6 only contains characters [space] 0 1 2 3 4 5 6 7 8 9 : . - a p m
+uint8_t thisFontHeight; // Font 7 is a 7 segment font and only contains characters [space] 0 1 2 3 4 5 6 7 8 9 : .
+uint16_t width;
+uint16_t height;
+
+uint16_t rgb(uint8_t r, uint8_t g, uint8_t b)
+{ // convert three 8-bit RGB levels to a 16 bit color value
+  // choose the 3 rgb values from https://html-color.codes/
+  r = r & 0xF8; // rgb565 red uses 5 bits
+  g = g & 0xFC; // rgb565 green uses 6 bits
+  b = b & 0xF8; // rgb565 blue uses 5 bits
+  return (r << 8) | (g << 3) | (b >> 3);  // bit shifting and combing into 16 bits
+}
+
+void labelButton1(char* string, uint16_t txtbgcolor)
+{ uint16_t txtX;
+  uint16_t txtY;
+  uint16_t thisTextWidth = tft.textWidth(string, fontNum);
+  // Serial.printf("rotation: %d, width: %d, height: %d, bgcolor: %X\n", rotation, width, height, txtbgcolor);
+  // Serial.printf("font height: %d, text width: %d, text: \"%s\"\n", thisFontHeight, thisTextWidth, string);
+  switch (rotation)
+  { 
+    case 0: // buttons on bottom, button1 is the left one
+    txtX = 2;
+    txtY = height - 4 - (thisFontHeight);
+    tft.fillRect(txtX - 2, txtY - 2, thisTextWidth + 6, thisFontHeight + 4, txtbgcolor);
+    break;
+    case 1: // buttons on right, button1 is the bottom one
+    txtX = width - 4 - thisTextWidth;
+    txtY = height - 4 - thisFontHeight;
+    tft.fillRect( txtX - 4, txtY - 2, thisTextWidth + 6, thisFontHeight + 4, txtbgcolor);
+    // Serial.printf("txtX: %d, txtY: %d\n", txtX, txtY);
+    break;
+    case 2: // buttons on top, button1 is the right side one
+    txtX = width - 4 - thisTextWidth;
+    txtY = 2;
+    tft.fillRect( txtX - 4, txtY - 2, thisTextWidth + 6, thisFontHeight + 4, txtbgcolor);
+    break;
+    case 3: // buttons on left; button1 is the top one
+    txtX = 2;
+    txtY = 2;
+    tft.fillRect( txtX - 2, txtY - 2, thisTextWidth + 6, thisFontHeight + 4, txtbgcolor);
+    break;
+    default:
+    Serial.printf("Invalid rotation number selected.  Needs to be either 0, 1, 2, or 3.");  
+  }
+  tft.drawString(string, txtX, txtY);
+}
+void labelButton2(char* string, uint16_t txtbgcolor)
+{ uint16_t txtX;
+  uint16_t txtY;
+  uint16_t thisTextWidth = tft.textWidth(string, fontNum);
+  switch (rotation)
+  { 
+    case 0: // buttons on bottom, button2 is the right side one
+    txtX = width - 4 - thisTextWidth;
+    txtY = height - 4 - thisFontHeight;
+    tft.fillRect(txtX - 4, txtY - 2, thisTextWidth + 6, thisFontHeight + 4, txtbgcolor);
+    break;
+    case 1: // buttons on right, button2 is the top one
+    txtX = width - 4 - thisTextWidth;
+    txtY = 2;
+    tft.fillRect( txtX - 4, txtY - 2, thisTextWidth + 6, thisFontHeight + 4, txtbgcolor);
+    break;
+    case 2: // buttons on top, button2 is the left one
+    txtX = 2;
+    txtY = 2;
+    tft.fillRect( txtX - 2, txtY - 2, thisTextWidth + 6, thisFontHeight + 4, txtbgcolor);
+    break;
+    case 3: // buttons on left; button2 is the bottom one
+    txtX = 2;
+    txtY = height - 4 - thisFontHeight;
+    tft.fillRect( txtX - 2, txtY - 4, thisTextWidth + 6, thisFontHeight + 4, txtbgcolor);
+    break;
+    default:
+    Serial.printf("Invalid rotation number selected.  Needs to be either 0, 1, 2, or 3.");  
+  }
+  tft.drawString(string, txtX, txtY);
+}
+
+uint16_t bgcolor    = rgb(0,   0,   0  ); //choose your screen background color. See the rgb function above for more info.
+uint16_t txtbgcolor = rgb(170, 0,   170); // background color for the text area
+uint16_t txtfgcolor = rgb(255, 255, 255); // text foreground color
+
+char button1Label[] = "Button1";
+char button2Label[] = "Rotate";
+
+void printCentered(char* msg, uint8_t lineNum)
+{
+  uint16_t thisTextWidth;
+  thisTextWidth = tft.textWidth(msg, fontNum);  
+  while (tft.textWidth(msg, fontNum) > width)
+  { Serial.printf("Too wide for screen: \"%s\"\n", msg);
+    msg[strlen(msg) - 1] = '\0'; }
+  thisTextWidth = tft.textWidth(msg, fontNum);
+  uint16_t txtX = (width / 2) - (thisTextWidth / 2);
+  if (rotation > 0) { lineNum++; }
+  uint16_t txtY = lineNum * thisFontHeight;
+  if (txtY + thisFontHeight < height)
+  {
+    tft.fillRect(0, txtY, width - 1, thisFontHeight - 1, bgcolor);
+    tft.drawString(msg, txtX, txtY);
+    //labelButton1(button1Label, txtbgcolor); // Don't have a use for button1 yet
+    labelButton2(button2Label, txtbgcolor);
+  }
+  else { Serial.printf("Tried to print beyond bottom of screen: \"%s\"\n", msg); }
+  
+}
 
 unsigned char crc_bits(unsigned char data)
 {   // https://stackoverflow.com/a/36505819/11087027
@@ -153,10 +266,10 @@ void clearIncomingBuffer()
 
 uint32_t swapped(uint32_t num)
 { // https://stackoverflow.com/a/2182184/11087027
-  return ((num>>24)&0xff) | // move byte 3 to byte 0
-                    ((num<<8)&0xff0000) | // move byte 1 to byte 2
-                    ((num>>8)&0xff00) | // move byte 2 to byte 1
-                    ((num<<24)&0xff000000); // byte 0 to byte 3
+  return ((num>>24)&0xff)      | // move byte 3 to byte 0
+         ((num<<8)&0xff0000)   | // move byte 1 to byte 2
+         ((num>>8)&0xff00)     | // move byte 2 to byte 1
+         ((num<<24)&0xff000000); //      byte 0 to byte 3
 }
 
 
@@ -174,7 +287,21 @@ void setup() {
   Serial.begin(115200);
   Serial2.begin(9600, SERIAL_8N1,25,26); // RX on pin 25 TX on pin 26
   delay(200);
-  Serial.printf("\nStarting, connecting to WiFi.\n");
+  Serial.printf("\nStarting, initializing TFT display\n");
+  tft.init();
+  tft.setRotation(rotation);
+  width = tft.width();
+  height = tft.height();
+  tft.fillScreen(bgcolor);
+  tft.setTextColor(txtfgcolor);
+  tft.setTextFont(fontNum);
+  thisFontHeight = tft.fontHeight(fontNum);
+  // labelButton1(button1Label, txtbgcolor); // Don't have a use for button1 yet
+  labelButton2(button2Label, txtbgcolor);    // redraw button label in case it gets covered up
+  
+  Serial.printf("Connecting to WiFi.\n");
+  printCentered("WiFi connecting:", 3);
+  printCentered((char *)networkName, 4);
   Serial2.setTimeout(timeout);
 
   //Connect to the WiFi network
@@ -191,24 +318,42 @@ void setup() {
   Serial.printf("\nConnected to wifi. IP: ");
   Serial.println(WiFi.localIP());
   Serial.printf("Setting the time from NTP server\n");
+  printCentered((char *)networkName,          3);
+  printCentered("connected.",     4);
+  // printCentered((char *)WiFi.localIP(),       5); // not sure how to convert to a string yet
+  printCentered("Getting time from:", 6);
+  printCentered((char *)ntpServer,            7);
   configTime((gmtOffset_hr * 3600L), (daylightOffset_hr * (int)3600), ntpServer);
   if(!getLocalTime(&timeinfo))
   {
     Serial.println("Failed to obtain time");
+    printCentered("Time failed", 6);
     return;
   }
   else
   {
     Serial.printf("Time set. ");
+    tft.fillScreen(bgcolor);
     char timeStringBuff[50];
     strftime(timeStringBuff, sizeof(timeStringBuff), "%A, %B %d %Y %H:%M:%S", &timeinfo);
     Serial.printf("%s\n", timeStringBuff);
+    strftime(timeStringBuff, sizeof(timeStringBuff), "%A,", &timeinfo);
+    printCentered(timeStringBuff, 0);
+    strftime(timeStringBuff, sizeof(timeStringBuff), "%B", &timeinfo);
+    printCentered(timeStringBuff, 1);
+    strftime(timeStringBuff, sizeof(timeStringBuff), "%d, %Y", &timeinfo);
+    printCentered(timeStringBuff, 2);
+    strftime(timeStringBuff, sizeof(timeStringBuff), "%H:%M:%S", &timeinfo);
+    printCentered(timeStringBuff, 3);
+    
     //uint32_t unixTime = timeinfo.now();
     //Serial.println("\nUnix timestamp: %ld", unixTime);
   }
+  printCentered("Opening UDP port", 7);
   Serial.printf("\nOpening reference to UDP port - ");
   udp.begin(udpPort);
   Serial.printf("Done.\n");
+  printCentered("", 7);
   connected = true;
   
   clearIncomingBuffer();
@@ -273,7 +418,7 @@ void loop() {
       if(connected)
       { udp.beginPacket(udpAddress,udpPort);
         uint8_t timestamp [sizeof(now)];
-        timt_t now2;
+        time_t now2;
         time(&now);
         now2 = now;
         now += epochShift;
@@ -299,7 +444,16 @@ void loop() {
   // Serial.printf("Epochtime: %x\n", getTime());
   strftime(timeStringBuff, sizeof(timeStringBuff) - 1, "%A, %B %d %Y %H:%M:%S", &timeinfo);
   Serial.printf("%s - min sec %d %d\n", timeStringBuff, timeinfo.tm_min, timeinfo.tm_sec);
-  
+  strftime(timeStringBuff, sizeof(timeStringBuff), "%A, %B %d %Y %H:%M:%S", &timeinfo);
+  Serial.printf("%s\n", timeStringBuff);
+  strftime(timeStringBuff, sizeof(timeStringBuff), "%A,", &timeinfo);
+  printCentered(timeStringBuff, 0);
+  strftime(timeStringBuff, sizeof(timeStringBuff), "%B", &timeinfo);
+  printCentered(timeStringBuff, 1);
+  strftime(timeStringBuff, sizeof(timeStringBuff), "%d, %Y", &timeinfo);
+  printCentered(timeStringBuff, 2);
+  strftime(timeStringBuff, sizeof(timeStringBuff), "%H:%M:%S", &timeinfo);
+  printCentered(timeStringBuff, 3);
   
   
   /*
