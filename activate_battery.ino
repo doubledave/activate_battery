@@ -36,6 +36,7 @@ const int udpPort = 5606;
 boolean connected = false;
 //The udp library class
 WiFiUDP udp;
+const uint32_t epochShift = 2208988800; // change by number of seconds in 70 years (1900 based timestamp to 1970 based timestamp)  int(365.25 * 70) * 24 * 60 * 60
 
 const uint8_t wakeupstring[] = {
   0x3A, 0x13, 0x01, 0x16, 0x79 };
@@ -273,11 +274,13 @@ void loop() {
       { udp.beginPacket(udpAddress,udpPort);
         uint8_t timestamp [sizeof(now)];
         time(&now);
-        now += 2208988800;
+        now += epochShift;
         now = swapped(now);
         memcpy(&timestamp, &now, sizeof(now));
         udp.write(timestamp, sizeof(timestamp)); 
         udp.write(incomingBuffer, sizeof(incomingBuffer));
+        now = swapped(now); now -= epochShift; // change it back
+        udp.printf(" %lu", now);
         udp.endPacket();
         // Serial.printf("sent %d bytes UDP\n", sizeof(incomingBuffer));
       }
@@ -287,7 +290,7 @@ void loop() {
   char timeStringBuff[50];
   
   time(&now);
-  now += 2208988800; // change by 70 years (1900 based timestamp to 1970 based timestamp)
+  now += epochShift; // change by 70 years (1900 based timestamp to 1970 based timestamp)
   getLocalTime(&timeinfo);
   
   Serial.printf("timestamp: %lu\n", now);
