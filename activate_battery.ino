@@ -273,14 +273,16 @@ void loop() {
       if(connected)
       { udp.beginPacket(udpAddress,udpPort);
         uint8_t timestamp [sizeof(now)];
+        timt_t now2;
         time(&now);
+        now2 = now;
         now += epochShift;
         now = swapped(now);
         memcpy(&timestamp, &now, sizeof(now));
         udp.write(timestamp, sizeof(timestamp)); 
         udp.write(incomingBuffer, sizeof(incomingBuffer));
-        now = swapped(now); now -= epochShift; // change it back
-        udp.printf(" %lu", now);
+        // now = swapped(now) - epochShift; // change it back
+        udp.printf(" %lu", now2);
         udp.endPacket();
         // Serial.printf("sent %d bytes UDP\n", sizeof(incomingBuffer));
       }
