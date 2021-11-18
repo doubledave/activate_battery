@@ -26,12 +26,13 @@
 
 const char networkName[] = "ssid";
 const char networkPswd[] = "pass";
-const char udpAddress[]  = "192.168.1.255";
 const char ntpServer1[]  = "north-america.pool.ntp.org";
 // const char ntpServer2[]  = "time.nist.gov"; // backup server
 const float gmtOffset_hr = -6.0f;
 const float daylightOffset_hr = 1.0f;
 const int udpPort = 5606;
+char udpAddress[16];        //  This variable gets filled in as the WiFi subnet's broadcast address.
+
 
 TFT_eSPI tft = TFT_eSPI();
 
@@ -40,7 +41,8 @@ uint8_t mac[6];
 boolean connected = false;
 //The udp library class
 WiFiUDP udp;
-const uint32_t epochShift = 2208988800; // change by number of seconds in 70 years (1900 based timestamp to 1970 based timestamp)  int(365.25 * 70) * 24 * 60 * 60
+const uint32_t epochShift = 2208988800; // change by number of seconds in 70 years (1900 based timestamp to 1970 based timestamp)
+                                        // 60 seconds * 60 minutes * 24 hours * int(365.25 days * 70 years)
 
 const uint8_t wakeupstring[] = {
   0x3A, 0x13, 0x01, 0x16, 0x79 };
@@ -284,7 +286,26 @@ long smallerof(long a, long b)
   return a;
 }
 
-String ip2String(const IPAddress& ipAddress)
+String broadcastAddr(IPAddress localIP, IPAddress subnetMask)
+{
+  uint32_t ip;
+  ip =  localIP[0] * 0x1000000;
+  ip += localIP[1] * 0x10000;
+  ip += localIP[2] * 0x100;
+  ip += localIP[3];
+  uint32_t mask;
+  mask =  subnetMask[0] * 0x1000000;
+  mask += subnetMask[1] * 0x10000;
+  mask += subnetMask[2] * 0x100;
+  mask += subnetMask[3];
+  uint32_t broadcastIP = (ip & mask) + (~mask);
+  return String((broadcastIP >> 24) & 0xff) + String(".") +
+         String((broadcastIP >> 16) & 0xff) + String(".") +
+         String((broadcastIP >> 8 ) & 0xff) + String(".") +
+         String((broadcastIP      ) & 0xff);
+}
+
+String ip2String(IPAddress ipAddress)
 { // https://stackoverflow.com/a/55805863/11087027
   return String(ipAddress[0]) + String(".") +
          String(ipAddress[1]) + String(".") +
@@ -348,7 +369,7 @@ void setup() {
     Serial.print(".");
   }
   Serial.printf("\nConnected to wifi. IP: ");
-  Serial.printf("%s\n", ip2String(WiFi.localIP()));
+  Serial.printf("%s\n", ip2String(WiFi.localIP()).c_str());
   Serial.printf("Setting the time from NTP server\n");
   printCentered((char *)networkName,                         0);
   printCentered((char *)ip2String(WiFi.localIP()).c_str(),   1);
@@ -356,6 +377,9 @@ void setup() {
   printCentered((char *)ntpServer1,                          2);
   // printCentered((char *)ntpServer2,                          4);
   Serial.printf("Gateway IP: %s\n", (char *)ip2String(WiFi.gatewayIP()).c_str());
+  Serial.printf("mask: %s\n", ip2String(WiFi.subnetMask()).c_str());
+  strcpy(udpAddress, (char *)broadcastAddr(WiFi.localIP(), WiFi.subnetMask()).c_str() );
+  Serial.printf("Broadcasting to: %s\n", udpAddress);
   configTime((gmtOffset_hr * 3600L), (daylightOffset_hr * (int)3600), ntpServer1, (char *)ip2String(WiFi.gatewayIP()).c_str());
   delay(400);
   if(!getLocalTime(&timeinfo))
@@ -472,8 +496,8 @@ void loop() {
 
   char timeStringBuff[50];
   
-  time(&now);
-  now += epochShift; // change by 70 years (1900 based timestamp to 1970 based timestamp)
+  // time(&now);
+  // now += epochShift; // change by 70 years (1900 based timestamp to 1970 based timestamp)
   getLocalTime(&timeinfo);
   
   // Serial.printf("timestamp: %lu\n", now);
