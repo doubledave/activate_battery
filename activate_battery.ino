@@ -2,7 +2,7 @@
  * This sketch is for a Lilygo TTGO T-Display which uses an Espressif ESP32.
  * It sends the 5-byte wakupstring to a NCR18650BD Okai ES200G scooter battery pack
  * and interprets the 36-byte data packet returned from the battery pack.
- * TODO: Display battery stats on the display, transmit packet over UDP.
+ * TODO: Display battery stats on the display.
  * https://github.com/espressif/arduino-esp32/blob/master/libraries/WiFi/examples/WiFiUDPClient/WiFiUDPClient.ino
  *
  * Connections: Use a DC to DC converter that has a common negative that converts 42+ volts DC to 5V DC.
@@ -263,6 +263,9 @@ float lowToHighCellDifference(float lowCellV, float highCellV)
   return highCellV - lowCellV;
 }
 
+struct tm timeinfo;
+time_t now;
+
 void clearIncomingBuffer()
 {
   while (Serial2.available() > 0)
@@ -274,10 +277,10 @@ void clearIncomingBuffer()
 
 uint32_t swapped(uint32_t num)
 { // https://stackoverflow.com/a/2182184/11087027
-  return ((num>>24)&0xff)      | // move byte 3 to byte 0
-         ((num<<8)&0xff0000)   | // move byte 1 to byte 2
-         ((num>>8)&0xff00)     | // move byte 2 to byte 1
-         ((num<<24)&0xff000000); //      byte 0 to byte 3
+  return ((num>>24)&      0xff) | // move byte 3 to byte 0
+         ((num<<8 )&  0xff0000) | // move byte 1 to byte 2
+         ((num>>8 )&    0xff00) | // move byte 2 to byte 1
+         ((num<<24)&0xff000000);  //      byte 0 to byte 3
 }
 
 long smallerof(long a, long b)
@@ -290,13 +293,13 @@ String broadcastAddr(IPAddress localIP, IPAddress subnetMask)
 {
   uint32_t ip;
   ip =  localIP[0] * 0x1000000;
-  ip += localIP[1] * 0x10000;
-  ip += localIP[2] * 0x100;
+  ip += localIP[1] *   0x10000;
+  ip += localIP[2] *     0x100;
   ip += localIP[3];
   uint32_t mask;
   mask =  subnetMask[0] * 0x1000000;
-  mask += subnetMask[1] * 0x10000;
-  mask += subnetMask[2] * 0x100;
+  mask += subnetMask[1] *   0x10000;
+  mask += subnetMask[2] *     0x100;
   mask += subnetMask[3];
   uint32_t broadcastIP = (ip & mask) + (~mask);
   return String((broadcastIP >> 24) & 0xff) + String(".") +
@@ -323,18 +326,28 @@ String mac2String(uint8_t* mac)
          String(mac[5],HEX);
 }
 
-
-struct tm timeinfo;
-time_t now;
+void updateTimeLCD()
+{
+  char timeStringBuff[50];
+  getLocalTime(&timeinfo);
+  strftime(timeStringBuff, sizeof(timeStringBuff) - 1, "%A, %B %d %Y %H:%M:%S", &timeinfo);
+  Serial.printf("%s\n", timeStringBuff);
+  strftime(timeStringBuff, sizeof(timeStringBuff), "%A,", &timeinfo);
+  printCentered(timeStringBuff, 0);
+  strftime(timeStringBuff, sizeof(timeStringBuff), "%B", &timeinfo);
+  printCentered(timeStringBuff, 1);
+  strftime(timeStringBuff, sizeof(timeStringBuff), "%d, %Y", &timeinfo);
+  printCentered(timeStringBuff, 2);
+  strftime(timeStringBuff, sizeof(timeStringBuff), "%H:%M:%S", &timeinfo);
+  printCentered(timeStringBuff, 3);
+}
 
 uint8_t size;
 long timeout = 700;
 unsigned long desiredCycleTime = 1000;
 
 
-
 void setup() {
-  // put your setup code here, to run once:
   Serial.begin(115200);
   Serial2.begin(9600, SERIAL_8N1,25,26); // RX on pin 25 TX on pin 26
   delay(200);
@@ -363,60 +376,56 @@ void setup() {
   { WiFi.begin(networkName, networkPswd); }
   else
   { WiFi.begin(networkName); }
-  while (WiFi.status() != WL_CONNECTED)
+  
+  for (int i = 0; ( (i < 60) && (WiFi.status() != WL_CONNECTED) ); i++)
   {
     delay(500);
     Serial.print(".");
   }
-  Serial.printf("\nConnected to wifi. IP: ");
-  Serial.printf("%s\n", ip2String(WiFi.localIP()).c_str());
-  Serial.printf("Setting the time from NTP server\n");
-  printCentered((char *)networkName,                         0);
-  printCentered((char *)ip2String(WiFi.localIP()).c_str(),   1);
-  printCentered((char *)ip2String(WiFi.gatewayIP()).c_str(), 3);
-  printCentered((char *)ntpServer1,                          2);
-  // printCentered((char *)ntpServer2,                          4);
-  Serial.printf("Gateway IP: %s\n", (char *)ip2String(WiFi.gatewayIP()).c_str());
-  Serial.printf("mask: %s\n", ip2String(WiFi.subnetMask()).c_str());
-  strcpy(udpAddress, (char *)broadcastAddr(WiFi.localIP(), WiFi.subnetMask()).c_str() );
-  Serial.printf("Broadcasting to: %s\n", udpAddress);
-  configTime((gmtOffset_hr * 3600L), (daylightOffset_hr * (int)3600), ntpServer1, (char *)ip2String(WiFi.gatewayIP()).c_str());
-  delay(400);
-  if(!getLocalTime(&timeinfo))
+  if (WiFi.status() == WL_CONNECTED) { connected = true; }
+  else { WiFi.disconnect(); }  // stop trying if it timed out.
+
+  if (connected)
   {
-    Serial.println("Failed to obtain time");
-    printCentered("Time failed", 2);
-    printCentered("",            3);
-    printCentered("",            4);
-    return;
+    Serial.printf("\nConnected to wifi. IP: ");
+    Serial.printf("%s\n", ip2String(WiFi.localIP()).c_str());
+    Serial.printf("Setting the time from NTP server\n");
+    printCentered((char *)networkName,                         0);
+    printCentered((char *)ip2String(WiFi.localIP()).c_str(),   1);
+    printCentered((char *)ip2String(WiFi.gatewayIP()).c_str(), 3);
+    printCentered((char *)ntpServer1,                          2);
+    // printCentered((char *)ntpServer2,                          4);
+    Serial.printf("Gateway IP: %s\n", (char *)ip2String(WiFi.gatewayIP()).c_str());
+    Serial.printf("mask: %s\n", ip2String(WiFi.subnetMask()).c_str());
+    strcpy(udpAddress, (char *)broadcastAddr(WiFi.localIP(), WiFi.subnetMask()).c_str() );
+    Serial.printf("Broadcasting to: %s\n", udpAddress);
+    configTime((gmtOffset_hr * 3600L), (daylightOffset_hr * (int)3600), ntpServer1, (char *)ip2String(WiFi.gatewayIP()).c_str());
+    delay(400);
+    if(!getLocalTime(&timeinfo))
+    {
+      Serial.println("Failed to obtain time");
+      printCentered("Time failed", 2);
+      printCentered("",            3);
+      printCentered("",            4);
+      return;
+    }
+    else
+    {
+      Serial.printf("Time set. ");
+      tft.fillScreen(bgcolor);
+      updateTimeLCD();
+    }
+    printCentered("Opening UDP port", 0);
+    Serial.printf("\nOpening reference to UDP port - ");
+    udp.begin(udpPort);
+    Serial.printf("Done.\n");
+    printCentered("", 0);
   }
   else
   {
-    Serial.printf("Time set. ");
-    tft.fillScreen(bgcolor);
-    char timeStringBuff[50];
-    strftime(timeStringBuff, sizeof(timeStringBuff), "%A, %B %d %Y %H:%M:%S", &timeinfo);
-    Serial.printf("%s\n", timeStringBuff);
-    strftime(timeStringBuff, sizeof(timeStringBuff), "%A,", &timeinfo);
-    printCentered(timeStringBuff, 0);
-    strftime(timeStringBuff, sizeof(timeStringBuff), "%B", &timeinfo);
-    printCentered(timeStringBuff, 1);
-    strftime(timeStringBuff, sizeof(timeStringBuff), "%d, %Y", &timeinfo);
-    printCentered(timeStringBuff, 2);
-    strftime(timeStringBuff, sizeof(timeStringBuff), "%H:%M:%S", &timeinfo);
-    printCentered(timeStringBuff, 3);
-    
-    //uint32_t unixTime = timeinfo.now();
-    //Serial.println("\nUnix timestamp: %ld", unixTime);
+    Serial.printf("Failed to connect to WiFi.\n");
+    printCentered("WiFi failed:", 1); // leaving MAC address & SSID on the screen
   }
-  printCentered("Opening UDP port", 0);
-  Serial.printf("\nOpening reference to UDP port - ");
-  udp.begin(udpPort);
-  Serial.printf("Done.\n");
-  printCentered("", 0);
-  connected = true;
-  
-  clearIncomingBuffer();
 }
 
 void loop() {
@@ -430,17 +439,24 @@ void loop() {
   uint8_t incomingBuffer [36];
   // Serial.printf("%d\n", sizeof(incomingBuffer));
   size_t bufferSize = Serial2.readBytes(incomingBuffer, sizeof(incomingBuffer));
-  clearIncomingBuffer();
+  clearIncomingBuffer();  // discard anything coming in beyond first 36 bytes. not expecting more
+  // before we continue, lets check if WiFi got disconnected
+  if (connected)
+  { if (WiFi.status() != WL_CONNECTED)
+    { connected = false;
+      WiFi.disconnect();
+      Serial.printf("\n***\n*** WiFi disconnected ***\n***\n\n");
+      printCentered("NO WIFI", 4);
+    }
+  }
+  // TODO: work in a way to eventually reconnect to wifi and obtain the time if wifi
+  // comes online after it was found to be offline/failed earlier
   if (bufferSize != 36)
   {
     if (bufferSize > 0)
-    {
-      Serial.printf("Error: Only received %d out of 36 bytes in %.3f second timeout.\n", bufferSize, (timeout / 1000.0f) );
-    }
+    { Serial.printf("Error: Only received %d out of 36 bytes in %.3f second timeout.\n", bufferSize, (timeout / 1000.0f) ); }
     else
-    {
-      Serial.printf("Nothing received in %.3f second timeout.\n", (timeout / 1000.0f) );
-    }
+    { Serial.printf("Nothing received in %.3f second timeout.\n", (timeout / 1000.0f) ); }
   }
   else // the buffer size is correct
   {
@@ -489,33 +505,17 @@ void loop() {
         // now = swapped(now) - epochShift; // change it back
         udp.printf(" %lu", now2);
         udp.endPacket();
-        // Serial.printf("sent %d bytes UDP\n", sizeof(incomingBuffer));
+        Serial.printf("sent UDP packet to %s:%d\n", udpAddress, udpPort);
       }
     }
   }
 
-  char timeStringBuff[50];
-  
-  // time(&now);
-  // now += epochShift; // change by 70 years (1900 based timestamp to 1970 based timestamp)
-  getLocalTime(&timeinfo);
-  
-  // Serial.printf("timestamp: %lu\n", now);
-  // Serial.printf("Epochtime: %x\n", getTime());
-  strftime(timeStringBuff, sizeof(timeStringBuff) - 1, "%A, %B %d %Y %H:%M:%S", &timeinfo);
-  Serial.printf("%s\n", timeStringBuff);
-  strftime(timeStringBuff, sizeof(timeStringBuff), "%A,", &timeinfo);
-  printCentered(timeStringBuff, 0);
-  strftime(timeStringBuff, sizeof(timeStringBuff), "%B", &timeinfo);
-  printCentered(timeStringBuff, 1);
-  strftime(timeStringBuff, sizeof(timeStringBuff), "%d, %Y", &timeinfo);
-  printCentered(timeStringBuff, 2);
-  strftime(timeStringBuff, sizeof(timeStringBuff), "%H:%M:%S", &timeinfo);
-  printCentered(timeStringBuff, 3);
-
-  long rssi = WiFi.RSSI();
-  Serial.printf("Strength of WiFi signal from access point: %ld\n", rssi);
-  
+  updateTimeLCD();
+  if (connected)
+  {
+    long rssi = WiFi.RSSI();
+    Serial.printf("Strength of WiFi signal from access point: %ld\n", rssi);  
+  }
   
   /*
   // test crc routines
@@ -533,13 +533,11 @@ void loop() {
   // { Serial.printf("%x ", testVariable[it]); }
   Serial.printf("Test code variable - Size: %d, crc expected: %#x calculated: %#x\n", size, testVariable[size], dallas_crc8(testVariable, size)); */
   
-  // now wait as long as needed to restart the cycle almost exactly 5 seconds after the previous one started.
-unsigned long cycleEndTime = millis();
+  // now wait as long as needed to restart the cycle almost exactly 1 seconds after the previous one started.
+  unsigned long cycleEndTime = millis();
   Serial.printf("Ended at %.3f seconds, waiting ", (cycleEndTime - cycleStartTime) / 1000.0F );
   long desiredEndTime = cycleStartTime + desiredCycleTime; // this will begin to malfunction after being online for 7.1 weeks or half of that?
   long timeToWait = desiredEndTime - cycleEndTime;
-  // Serial.printf("cycleStartTime:  %d ms,\n cycleStopTime:  %d ms,\ndesiredEndTime: %d ms,\ntimeToWait: %d ms\n", cycleStartTime, cycleEndTime, desiredEndTime, timeToWait);
-
   if (timeToWait > 0)
   {
     while (millis() - desiredEndTime > 1)
@@ -549,42 +547,4 @@ unsigned long cycleEndTime = millis();
     }
   }
   Serial.printf(" - Full cycle time: %.3f S\n\n", (millis() - cycleStartTime) / 1000.0 );
-  
 }
-
-/*
-void connectToWifi(const char * ssid, const char * pwd)
-{
-  Serial.println("Connecting to WiFi network: " + String(ssid));
-  // delete old config
-  WiFi.disconnect(true);
-  //register event handler
-  WiFi.onEvent(WiFiEvent);
-  
-  //Initiate connection
-  if (sizeof(pwd) > 0)
-  { WiFi.begin(ssid, pwd); }
-  else
-  { WiFi.begin(ssid); }
-  Serial.println("Waiting for WIFI connection...");
-}
-
-//wifi event handler
-void WiFiEvent(WiFiEvent_t event){
-    switch(event) {
-      case ARDUINO_EVENT_WIFI_STA_GOT_IP:
-          //When connected set 
-          Serial.print("WiFi connected! IP address: ");
-          Serial.println(WiFi.localIP());  
-          //initializes the UDP state
-          //This initializes the transfer buffer
-          udp.begin(WiFi.localIP(),udpPort);
-          connected = true;
-          break;
-      case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
-          Serial.println("WiFi lost connection");
-          connected = false;
-          break;
-      default: break;
-    }
-} */
