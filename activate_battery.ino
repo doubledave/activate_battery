@@ -166,7 +166,7 @@ void printCentered(char* msg, uint8_t lineNum)
     tft.fillRect(0, txtY, width - 1, thisFontHeight, bgcolor);
     tft.drawString(msg, txtX, txtY);
     //labelButton1(button1Label, txtbgcolor); // Don't have a use for button1 yet
-    labelButton2(button2Label, txtbgcolor);
+    //labelButton2(button2Label, txtbgcolor); // Don't want to label button2 yet; it covers up the battery percentage
   }
   else { Serial.printf("Tried to print beyond bottom of screen: \"%s\"\n", msg); }
   
@@ -318,12 +318,10 @@ String ip2String(IPAddress ipAddress)
 
 String mac2String(uint8_t* mac)
 {
-  return String(mac[0],HEX) + String(":") +
-         String(mac[1],HEX) + String(":") +
-         String(mac[2],HEX) + String(":") +
-         String(mac[3],HEX) + String(":") +
-         String(mac[4],HEX) + String(":") +
-         String(mac[5],HEX);
+  char macStr[18]; // https://stackoverflow.com/a/16550666/11087027
+  snprintf(macStr, sizeof(macStr), "%02x:%02x:%02x:%02x:%02x:%02x",
+           mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], mac[6]);
+  return String(macStr);
 }
 
 void updateTimeLCD()
@@ -491,6 +489,7 @@ void loop() {
       float lowCell = lowCellV(incomingBuffer);
       float highCell = highCellV(incomingBuffer);
       Serial.printf("\nLow cell: %.3fV, High cell: %.3fV, Difference: %.3fV\n", lowCell, highCell, lowToHighCellDifference(lowCell, highCell) );
+      printCentered((char *)String(String(percentCharged(incomingBuffer)) + "% " + String(amps) + "A" ).c_str(), 4);
       if(connected)
       { udp.beginPacket(udpAddress,udpPort);
         uint8_t timestamp [sizeof(now)];
